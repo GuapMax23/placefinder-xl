@@ -1,4 +1,4 @@
-const BACKEND_URL = 'http://localhost:3000';
+const BACKEND_URL = 'http://10.48.173.133:3000';
 
 function showStatus(message, type) {
   const statusEl = document.getElementById('status');
