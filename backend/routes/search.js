@@ -5,7 +5,8 @@ const { searchPlaces } = require('../services/places');
 const { generateExcel } = require('../services/excel');
 
 router.post('/', async (req, res) => {
-  const { keyword, zone, radius } = req.body;
+  const { keyword, zone, radius, maxResults } = req.body;
+  const targetResults = parseInt(maxResults, 10) || 20;
 
   // 🔍 Validation basique
   if (!keyword || !zone) {
@@ -19,7 +20,8 @@ router.post('/', async (req, res) => {
     const { places } = await searchPlaces({
       keyword,
       zone,
-      radius
+      radius,
+      targetResults
     });
 
     if (!places || places.length === 0) {
@@ -34,7 +36,7 @@ router.post('/', async (req, res) => {
     }
 
     // 📊 Génération Excel
-    const buffer = generateExcel(places, keyword, zone);
+    const buffer = await generateExcel(places, keyword, zone);
 
     // 📥 Headers téléchargement
     res.setHeader(

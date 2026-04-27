@@ -1,98 +1,150 @@
-const XLSX = require("xlsx");
+const ExcelJS = require('exceljs');
 
-function generateExcel(places, keyword, zone) {
-  // Définition des colonnes avec les entêtes françaises
-  const headers = [
-    "Nom",
-    "Adresse",
-    "Contact Téléphonique", // Nouveau champ pour le lien WhatsApp
-    "Site Web",
-    "Note (sur 5)",
-    "Latitude",
-    "Longitude",
-    "Statut",
-    "Horaires", // Champ pour les horaires formatés
+async function generateExcel(places, keyword, zone) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Placefinder XL';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet('Résultats');
+
+  // Définition des colonnes (Ajout Email et Lien Maps)
+  worksheet.columns = [
+    { header: 'Nom', key: 'nom', width: 35 },
+    { header: 'Adresse', key: 'adresse', width: 45 },
+    { header: 'Email', key: 'email', width: 30 },
+    { header: 'Contact Téléphonique', key: 'telephone', width: 25 },
+    { header: 'Site Web', key: 'siteWeb', width: 35 },
+    { header: 'Note (sur 5)', key: 'note', width: 15 },
+    { header: 'Horaires', key: 'horaires', width: 55 },
+    { header: 'Localisation', key: 'localisation', width: 20 } // Colonne pour le lien Maps
   ];
 
-  // Transformation des données en tableau de lignes
-  const rows = places.map((p) => {
-    // Création du lien WhatsApp
-    // On nettoie le numéro international pour n'avoir que des chiffres
-    const cleanedPhoneNumber = p.telephoneInternational.replace(/\D/g, "");
-    let whatsappLink = 
-      cleanedPhoneNumber !== "N/A" && cleanedPhoneNumber !== "" 
-        ? `https://wa.me/${cleanedPhoneNumber}` 
-        : "";
-    
-    return [
-      p.nom,
-      p.adresse,
-      // Pour le contact téléphonique, nous mettrons le numéro national visible et le lien en arrière-plan
-      // Le format { v: value, l: { Target: url, Tooltip: text } } est utilisé par SheetJS pour les hyperliens
-      whatsappLink ? { v: p.telephoneNational, l: { Target: whatsappLink, Tooltip: "Contacter via WhatsApp" } } : p.telephoneNational,
-      p.siteWeb ? { v: p.siteWeb, l: { Target: p.siteWeb, Tooltip: "Visiter le site" } } : "N/A",
-      p.note,
-      p.latitude,
-      p.longitude,
-      p.statut,
-      p.horaires, // Utilisation des horaires formatés
-    ];
-  } );
-
-  const worksheetData = [headers, ...rows];
-  const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-
-  // --- Styles et mise en forme ---
-  const headerStyle = {
-    font: { bold: true, color: { rgb: "FFFFFF" } },
-    fill: { fgColor: { rgb: "000000" } },
-    alignment: { horizontal: "center", vertical: "center" },
-    border: { 
-      top: { style: "thin", color: { rgb: "DDDDDD" } },
-      bottom: { style: "thin", color: { rgb: "DDDDDD" } },
-      left: { style: "thin", color: { rgb: "DDDDDD" } },
-      right: { style: "thin", color: { rgb: "DDDDDD" } }
-    }
-  };
-
-  headers.forEach((_, i) => {
-    const cellRef = XLSX.utils.encode_cell({ r: 0, c: i });
-    if (!worksheet[cellRef]) worksheet[cellRef] = {};
-    worksheet[cellRef].s = headerStyle;
+  // Style de l'en-tête (Noir avec texte Jaune)
+  const headerRow = worksheet.getRow(1);
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFD700' } }; // Jaune
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF000000' } // Noir
+    };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF000000' } },
+      left: { style: 'medium', color: { argb: 'FF000000' } },
+      bottom: { style: 'medium', color: { argb: 'FF000000' } },
+      right: { style: 'medium', color: { argb: 'FF000000' } }
+    };
   });
+  headerRow.height = 30;
 
-  const rowStyleEven = { fill: { fgColor: { rgb: "FFFFFF" } } };
-  const rowStyleOdd = { fill: { fgColor: { rgb: "FFFFE0" } } }; // Jaune très clair
+  // Remplissage des données
+  places.forEach((p, index) => {
+    const rowNumber = index + 2;
+    const row = worksheet.getRow(rowNumber);
 
-  for (let r = 0; r < rows.length; r++) {
-    const style = (r % 2 === 0) ? rowStyleEven : rowStyleOdd;
-    for (let c = 0; c < headers.length; c++) {
-      const cellRef = XLSX.utils.encode_cell({ r: r + 1, c: c });
-      if (worksheet[cellRef]) {
-        worksheet[cellRef].s = style;
+    // Téléphone avec lien WhatsApp si possible
+    let telephoneCell = p.telephone || null;
+    if (p.telephoneInternational) {
+      const cleanedPhoneNumber = p.telephoneInternational.replace(/\D/g, "");
+      if (cleanedPhoneNumber) {
+        telephoneCell = {
+          text: p.telephone || p.telephoneInternational,
+          hyperlink: `https://wa.me/${cleanedPhoneNumber}`,
+          tooltip: 'Contacter via WhatsApp'
+        };
       }
     }
-  }
 
-  // Largeur des colonnes
-  worksheet["!cols"] = [
-    { wch: 30 }, // Nom
-    { wch: 45 }, // Adresse
-    { wch: 20 }, // Contact Téléphonique
-    { wch: 35 }, // Site Web
-    { wch: 12 }, // Note
-    { wch: 12 }, // Latitude
-    { wch: 12 }, // Longitude
-    { wch: 15 }, // Statut
-    { wch: 40 }, // Horaires
-  ];
+    // Site web
+    let siteWebCell = null;
+    if (p.siteWeb) {
+      siteWebCell = {
+        text: p.siteWeb,
+        hyperlink: p.siteWeb,
+        tooltip: 'Visiter le site'
+      };
+    }
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Résultats");
+    // Localisation (Maps)
+    let mapsCell = null;
+    if (p.googleMapsUri) {
+      mapsCell = {
+        text: 'Voir sur la carte',
+        hyperlink: p.googleMapsUri,
+        tooltip: 'Ouvrir dans Google Maps'
+      };
+    }
 
-  const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    // Horaires (avec retours à la ligne)
+    let horairesStr = null;
+    if (p.horaires && Array.isArray(p.horaires) && p.horaires.length > 0) {
+      horairesStr = p.horaires.join('\n');
+    }
 
-  return excelBuffer;
+    row.values = {
+      nom: p.nom || null,
+      adresse: p.adresse || null,
+      email: p.email || null, // Sera probablement null la majorité du temps
+      telephone: telephoneCell,
+      siteWeb: siteWebCell,
+      note: p.note || null,
+      horaires: horairesStr,
+      localisation: mapsCell
+    };
+
+    // Style des cellules de la ligne
+    row.eachCell((cell, colNumber) => {
+      // Alignement global (au centre verticalement pour bien lire)
+      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      
+      // Alternance des couleurs de lignes pour la lisibilité
+      if (index % 2 === 1) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFDF0' } // Jaune ultra-clair
+        };
+      } else {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFFFF' } // Blanc
+        };
+      }
+
+      // Bordures noires
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+      };
+
+      // Styles spécifiques pour les liens (Site Web, WhatsApp, Localisation)
+      // Colonnes 4 (Téléphone), 5 (Site Web), 8 (Localisation)
+      if ((colNumber === 4 && cell.value && cell.value.hyperlink) || 
+          (colNumber === 5 && cell.value && cell.value.hyperlink) ||
+          (colNumber === 8 && cell.value && cell.value.hyperlink)) {
+        cell.font = { color: { argb: 'FF0563C1' }, underline: true };
+        // Pour "Localisation", centrer le texte "Voir sur la carte"
+        if (colNumber === 8) {
+           cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        }
+      }
+    });
+
+    // Ajustement de la hauteur de ligne pour les horaires
+    if (p.horaires && p.horaires.length > 0) {
+      row.height = Math.max(25, p.horaires.length * 15); // Hauteur adaptative plus généreuse
+    } else {
+      row.height = 25;
+    }
+  });
+
+  // Export en buffer
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer;
 }
 
 module.exports = { generateExcel };
