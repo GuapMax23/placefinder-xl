@@ -207,18 +207,6 @@ Le fichier généré contient :
 * Tableaux lisibles
 * Alternance de couleurs
 
----
-
-## ⚠️ Difficultés rencontrées
-
-* Authentification GitHub (token requis)
-* Permissions Docker (socket)
-* Structure des données Google Places
-* Gestion des champs manquants
-* Problèmes réseau entre machines
-* Configuration firewall (port 3000)
-
----
 
 ## 🔐 Sécurité
 
